@@ -1,0 +1,7 @@
+garment is one type of 'startapp'
+if in the future you got other data, such as user, then create another as functionality. 
+
+
+model.py is the model file for each types of entity
+
+you need to add entity name to the INSTALLED_APPS in the setting.py 
