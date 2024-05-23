@@ -4,6 +4,8 @@ from .serializers import UserSerializer
 from rest_framework.response import Response
 from firebase_admin import firestore, storage
 from django.contrib.auth.hashers import make_password
+import pytz
+import datetime
 
 @api_view(['POST'])
 def registerUser(request):
@@ -11,6 +13,12 @@ def registerUser(request):
     if serializer.is_valid():
         validated_data = serializer.validated_data
         validated_data['password'] = make_password(validated_data['password'])
+        validated_data['is_logged'] = True
+        
+        timezone = pytz.timezone('Asia/Singapore')
+        current_datetime = datetime.datetime.now(timezone)
+        validated_data['created_date'] = current_datetime
+        
         db = firestore.client()
         user_table = db.collection('user')
         user_document_ref = user_table.add(serializer.validated_data)[1]

@@ -79,6 +79,11 @@ def addGarment(request):
         db = firestore.client()
         garment_reference = db.collection('garment')
         garment_data = serializer.validated_data
+        
+        timezone = pytz.timezone('Asia/Singapore')
+        datetime = datetime.datetime.now(timezone)
+        
+        garment_data['created_date'] = datetime
         garment_documentID = garment_reference.add(garment_data)
         
         new_garment = garment_documentID[1].id
