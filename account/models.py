@@ -1,7 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
 
-class User(AbstractUser):
+class UserAccount(models.Model):
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
     username = models.TextField(unique=True)
