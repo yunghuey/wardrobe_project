@@ -41,7 +41,7 @@ def registerUser(request):
         # do token 
         expiration_time = current_datetime + timedelta(days=10)
         payload = {
-            'user_id': user_document_ref.id,
+            'uid': user_document_ref.id,
             'exp': expiration_time  # Expiration time
         }
         token = jwt.encode(payload, key=None, algorithm=None) 
@@ -79,18 +79,27 @@ def logoutUser(request):
         return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
-def getUserDetail(request, user_id):
+def getUserDetail(request):
+    token = request.headers.get('Authorization','').split('Bearer ')[-1]
     try:
-        db = firestore.client()
-        user_table = db.collection('user')
-        user_row = user_table.document(user_id)
-        doc_snapshot = user_row.get()
-        if doc_snapshot.exists:
-            user_data = doc_snapshot.to_dict()
-            user_data['id'] = user_id
-            return Response({'user': user_data}, status=200)
+        # Decode the JWT token
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token['uid']
+        if user_id:
+            db = firestore.client()
+            user_table = db.collection('user')
+            user_row = user_table.document(user_id)
+            doc_snapshot = user_row.get()
+            if doc_snapshot.exists:
+                user_data = doc_snapshot.to_dict()
+                user_data['id'] = user_id
+                return Response({'user': user_data}, status=200)
         else:
             return Response({'error': 'User not found'}, status=404)
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400) 
     except Exception as e:
         return Response({'error':str(e)}, status=400)
     
