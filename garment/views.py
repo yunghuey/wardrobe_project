@@ -27,16 +27,20 @@ CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA', 'CAM
 BRANDS_NAME = ['SKECHERS', 'ADIDAS', 'UNIQLO', 'ZARA','NIKE', 'COTTON ON', 'JORDAN','ASICS','NEW BALANCE',' TOMMYHILFIGER']
 COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GREEN', 'YELLOW', 'ORANGE YELLOW', 'ORANGE','WHITE','BLACK', 'GREY']
 
-# todo
+# done
 """ GET ALL GARMENTS - will remove soon because dont have this function"""
 @api_view(['GET'])
 def getAllGarments(request):
     try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        
         db = firestore.client()
         garment_reference = db.collection('garment')
         
         # the query to get all document
-        query = garment_reference.where('status','==', True)
+        query = garment_reference.where('status', '==', True).where('user_id', '==', user_id)
         garments_list = query.stream()
         garment_data = []
         for garment in garments_list:
@@ -45,27 +49,42 @@ def getAllGarments(request):
             garment_data.append(garment_dict)
                         
         return Response({'garments': garment_data}, status=200)
+    except jwt.ExpiredSignatureError:
+    # Token has expired
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+    # Token is invalid
+        return Response({'token': "Invalid token"}, status=400)
+    except Exception as e:
+        return Response({'error':str(e)}, status=400)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
 
-# todo
+# done
 """ GET INFORMATION OF ONE GARMENT BY id"""
 @api_view(['GET'])
 def getGarment(request, garment_id):
     try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+
         db = firestore.client()
-        garment_reference = db.collection('garment')
-        doc_ref = garment_reference.document(garment_id)
-        doc_snapshot = doc_ref.get()
-        # if document exist
-        # dictionary is like array, got key and value pair
-        if doc_snapshot.exists:
-            # convert document snapshot into dictionary
-            garment_data = doc_snapshot.to_dict()
-            garment_data['id'] = garment_id
-            return Response({'garments': garment_data}, status=200)
+        garment_table = db.collection('garment')
+        doc_ref = garment_table.document(garment_id)
+        garment = doc_ref.get().to_dict()
+        
+        if garment and garment.get('user_id') == user_id:
+            garment['id'] = garment_id
+            return Response({'garments': garment}, status=200)
         else:
             return Response({'error':'Garment not found'}, status=404)
+    except jwt.ExpiredSignatureError:
+    # Token has expired
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+    # Token is invalid
+        return Response({'token': "Invalid token"}, status=400)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
 
@@ -119,36 +138,54 @@ def addGarment(request):
     except Exception as e:
         return Response({'error': str   (e)}, status=400)
 
-# todo
+# DONE
 # update
 @api_view(['PUT'])
 def updateGarment(request, garment_id):
     try:
-        db = firestore.client()
-        garment_ref = db.collection('garment')
-        doc_ref = garment_ref.document(garment_id) # get garment document by ID
-        garment_data = doc_ref.get().to_dict() # convert into readable data
-        
-        #update garment data with request data
-        garment_data.update(request.data)
-        # save updated data into firestore
-        doc_ref.set(garment_data)
-        
-        return Response(garment_data, status=200)
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            garment_ref = db.collection('garment')
+            doc_ref = garment_ref.document(garment_id) # get garment document by ID
+            garment_data = doc_ref.get().to_dict() # convert into readable data
+            #update garment data with request data
+            garment_data.update(request.data)
+            # save updated data into firestore
+            doc_ref.set(garment_data)
+            return Response(garment_data, status=200)
+        return Response({'error':'problem in token'}, status=400)
+    except jwt.ExpiredSignatureError:
+    # Token has expired
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+    # Token is invalid
+        return Response({'token': "Invalid token"}, status=400)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
     
-# todo  
+# done
 # delete - make inactive
 @api_view(['DELETE'])
 def deleteGarment(request):
+    print('hello')
     try:
-        db = firestore.client()
-        garment_ref = db.collection('garment')
-        doc_ref = garment_ref.document(request.data.get('id'))
-        print(doc_ref)
-        doc_ref.update({'status': False})
-        return Response({'message': 'field updated'}, status=200)
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            garment_ref = db.collection('garment')
+            doc_ref = garment_ref.document(request.data.get('id'))
+            print(doc_ref)
+            doc_ref.update({'status': False})
+            return Response({'message': 'field updated'}, status=200)
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400)  
     except Exception as e:
         return Response({'error':str(e)}, status=400)
 

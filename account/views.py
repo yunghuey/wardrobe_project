@@ -62,7 +62,7 @@ def logoutUser(request):
         # Decode the JWT token
             print(token)
             decoded_token = jwt.decode(token, options={"verify_signature": False})
-            user_id = decoded_token['uid']
+            user_id = decoded_token.get('uid') or decoded_token.get('user_id')
             user_table = db.collection('user')
             user_row = user_table.document(user_id)
             user_row.update({'is_logged': False})
