@@ -116,6 +116,7 @@ def updateDetail(request, user_id):
     except Exception as e:
         return Response({'error': str   (e)}, status=400)
 
+# Done
 @api_view(['POST']) 
 def login(request):
     try:
@@ -137,11 +138,18 @@ def login(request):
 
             if check_password(password, user_doc['password']):
                 # generate custom token
-                firebase_token = auth.create_custom_token(user_id)
-                # update into row
+                timezone = pytz.timezone('Asia/Singapore')
+                current_datetime = datetime.datetime.now(timezone)
+                expiration_time = current_datetime + timedelta(days=10)
+                payload = {
+                    'user_id': user_id,
+                    'exp': expiration_time  # Expiration time
+                } 
+                token = jwt.encode(payload, key=None, algorithm=None) 
+                ## update into row
                 user_row = user_table.document(user_id)
-                user_row.update({'token': firebase_token})
-                return Response({'token':firebase_token}, status=200)
+                user_row.update({'token': token})
+                return Response({'token':token}, status=200)
             return Response({'error':'wrong password'}, status=400)
         return Response({'error': 'Username and password is wrong'}, stauts=400)
     except Exception as e:
