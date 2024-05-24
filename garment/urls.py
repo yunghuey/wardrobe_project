@@ -8,5 +8,5 @@ urlpatterns = [
     # datatype:paramter name at the function 
     path ('update/<str:garment_id>', views.updateGarment),
     path ('delete/', views.deleteGarment),
-    path('submitImage', views.processGarmentImage),
+    path('add', views.processGarmentImage),
 ]

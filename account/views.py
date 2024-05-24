@@ -78,6 +78,29 @@ def logoutUser(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+# done
+@api_view(['POST'])
+def refreshToken(request):
+    try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        timezone = pytz.timezone('Asia/Singapore')
+        current_datetime = datetime.datetime.now(timezone)
+        expiration_time = current_datetime + timedelta(days=10)
+        payload = {
+            'uid': user_id,
+            'exp': expiration_time  # Expiration time
+        }
+        newtoken = jwt.encode(payload, key=None, algorithm=None)
+        db = firestore.client()
+        user_table = db.collection('user')
+        user_row = user_table.document(user_id) 
+        user_row.update({'token':newtoken})
+        return Response({'token': newtoken}, status=201)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
 #done 
 @api_view(['GET'])
 def getUserDetail(request):
@@ -103,8 +126,7 @@ def getUserDetail(request):
         return Response({'token': "Invalid token"}, status=400) 
     except Exception as e:
         return Response({'error':str(e)}, status=400)
-
-#done
+    
 @api_view(['PUT'])
 def updateDetail(request):
     token = request.headers.get('Authorization','').split('Bearer ')[-1]

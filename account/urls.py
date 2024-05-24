@@ -7,5 +7,6 @@ urlpatterns = [
     path('get/', views.getUserDetail),
     path('update/', views.updateDetail),
     path('login/', views.login),
+    path('refreshToken/', views.refreshToken),
     # path('getGarment/<str:garment_id>', views.getGarment),
 ]

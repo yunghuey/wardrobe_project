@@ -20,12 +20,14 @@ from fuzzywuzzy import process
 import traceback
 import sys
 import pytz
+import jwt
 
 SIZES = ['2XS','XS', 'S', 'M', 'XXL', 'XL','L']
 CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA', 'CAMBODIA', 'BANGLADESH', 'LAOS', 'TURKEY', 'MOROCCO', 'PAKISTAN','VIETNAM', 'THAILAND', 'HONGKONG', 'SRILANKA']
 BRANDS_NAME = ['SKECHERS', 'ADIDAS', 'UNIQLO', 'ZARA','NIKE', 'COTTON ON', 'JORDAN','ASICS','NEW BALANCE',' TOMMYHILFIGER']
 COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GREEN', 'YELLOW', 'ORANGE YELLOW', 'ORANGE','WHITE','BLACK', 'GREY']
 
+# todo
 """ GET ALL GARMENTS - will remove soon because dont have this function"""
 @api_view(['GET'])
 def getAllGarments(request):
@@ -46,6 +48,7 @@ def getAllGarments(request):
     except Exception as e:
         return Response({'error':str(e)}, status=400)
 
+# todo
 """ GET INFORMATION OF ONE GARMENT BY id"""
 @api_view(['GET'])
 def getGarment(request, garment_id):
@@ -71,37 +74,52 @@ def handle_base64_image(image_data):
     image_file = ContentFile(decoded_image)
     return image_file
 
-#create
+# done
 @api_view(['POST'])
 def addGarment(request):
-    serializer = GarmentSerializer(data=request.data)
-    if serializer.is_valid():
-        db = firestore.client()
-        garment_reference = db.collection('garment')
-        garment_data = serializer.validated_data
-        
-        timezone = pytz.timezone('Asia/Singapore')
-        datetime = datetime.datetime.now(timezone)
-        
-        garment_data['created_date'] = datetime
-        garment_documentID = garment_reference.add(garment_data)
-        
-        new_garment = garment_documentID[1].id
-        base64Image = request.data.get('image')
-        binary_data = base64.b64decode(base64Image)
-        firebase_storage = storage.bucket()
-        filename = new_garment+ ".jpg"
-        blob = firebase_storage.blob(filename)
-        blob.upload_from_string(binary_data,content_type='image/jpeg')
-        
-        image_url = f"https://storage.googleapis.com/{firebase_storage.name}/{filename}"
-        garment_reference.document(new_garment).update({'image_url': image_url})
-        
-        response_data = {'response':"success"}
-        return Response(response_data,status=201)
-    print(serializer.errors)
-    return Response(serializer.errors, status=400)
+    token = request.headers.get('Authorization','').split('Bearer ')[-1]
+    try:
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
 
+        if user_id:
+            serializer = GarmentSerializer(data=request.data)
+            if serializer.is_valid():
+                db = firestore.client()
+                garment_reference = db.collection('garment')
+                garment_data = serializer.validated_data
+
+                timezone = pytz.timezone('Asia/Singapore')
+                currentdatetime = datetime.datetime.now(timezone)
+                
+                garment_data['created_date'] = currentdatetime
+                garment_data['user_id'] =  user_id
+                garment_documentID = garment_reference.add(garment_data)
+                new_garment = garment_documentID[1].id
+                base64Image = request.data.get('image')
+                binary_data = base64.b64decode(base64Image)
+
+                firebase_storage = storage.bucket()
+                filename = new_garment+ ".jpg"
+                blob = firebase_storage.blob(filename)
+                blob.upload_from_string(binary_data,content_type='image/jpeg')
+                
+                image_url = f"https://storage.googleapis.com/{firebase_storage.name}/{filename}"
+                garment_reference.document(new_garment).update({'image_url': image_url})
+                
+                response_data = {'response':"success"}
+                return Response(response_data,status=201)
+            print(serializer.errors)
+            return Response(serializer.errors, status=400)
+            
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400) 
+    except Exception as e:
+        return Response({'error': str   (e)}, status=400)
+
+# todo
 # update
 @api_view(['PUT'])
 def updateGarment(request, garment_id):
@@ -119,7 +137,8 @@ def updateGarment(request, garment_id):
         return Response(garment_data, status=200)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
-       
+    
+# todo  
 # delete - make inactive
 @api_view(['DELETE'])
 def deleteGarment(request):
