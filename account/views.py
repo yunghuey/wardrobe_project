@@ -78,6 +78,7 @@ def logoutUser(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+#done 
 @api_view(['GET'])
 def getUserDetail(request):
     token = request.headers.get('Authorization','').split('Bearer ')[-1]
@@ -102,26 +103,37 @@ def getUserDetail(request):
         return Response({'token': "Invalid token"}, status=400) 
     except Exception as e:
         return Response({'error':str(e)}, status=400)
-    
+
+#done
 @api_view(['PUT'])
-def updateDetail(request, user_id):
+def updateDetail(request):
+    token = request.headers.get('Authorization','').split('Bearer ')[-1]
     try:
-        db = firestore.client()
-        user_table = db.collection('user')
-        user_row = user_table.document(user_id)
-        user_data = user_row.get().to_dict()
-        print(user_data)
-        # print(user_data.where('is_logged', '==',True))
-        if user_data['is_logged'] == True:
-            if user_data['email'] == request.data.get('email'):
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        print(decoded_token)
+        user_id = decoded_token['uid']
+        if user_id:
+            db = firestore.client()
+            user_table = db.collection('user')
+            user_row = user_table.document(user_id)
+            user_data = user_row.get().to_dict()
+            print(user_data)
+            email_query = user_table.where('email', '==', request.data.get('email'))
+            email_docs = list(email_query.stream())
+            print(email_docs)
+            if email_docs and email_docs[0].id != user_id:
                 return Response({'error':'Email already exists.'}, status=400)
-            
-            if user_data['username'] == request.data.get('username'):
+            username_query = user_table.where('username', '==', request.data.get('username'))
+            username_docs = list(username_query.stream())
+            if username_docs and username_docs[0].id != user_id:
                 return Response({'error':'Username already exists.'}, status=400)
             user_data.update(request.data)
             user_row.set(user_data)
             return Response(user_data, status=200)
-        return Response({'error': 'User is not logged in'}, status=409)
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400) 
     except Exception as e:
         return Response({'error': str   (e)}, status=400)
 
