@@ -12,42 +12,48 @@ from datetime import timedelta
 # done
 @api_view(['POST'])
 def registerUser(request):
-    serializer = UserSerializer(data=request.data)
-    if serializer.is_valid():
-        validated_data = serializer.validated_data
+    try:
         
-        db = firestore.client()
-        user_table = db.collection('user')
-        # check for existing user with the same email
-        existing_email = user_table.where('email', '==', validated_data['email']).get()
-        if existing_email:
-            return Response({'error':'Email already exists.'}, status=400)
-        
-        existing_username = user_table.where('username', '==', validated_data['username']).get()
-        if existing_username:
-            return Response({'error':'Username already exists.'}, status=400)
-
-        validated_data['password'] = make_password(validated_data['password'])
-        
-        timezone = pytz.timezone('Asia/Singapore')
-        current_datetime = datetime.datetime.now(timezone)
-        validated_data['created_date'] = current_datetime
-        
-        
-        user_document_ref = user_table.add(validated_data)[1]
-        print(user_document_ref)
-        
-        # do token 
-        expiration_time = current_datetime + timedelta(days=10)
-        payload = {
-            'uid': user_document_ref.id,
-            'exp': expiration_time  # Expiration time
-        }
-        token = jwt.encode(payload, key=None, algorithm=None) 
-        user_document_ref.update({'token':token})
-        return Response({'token': token}, status=201)
-    # take note to save id into SharedPreference 
-    return Response(serializer.errors, status=400)
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            validated_data = serializer.validated_data
+            
+            db = firestore.client()
+            user_table = db.collection('user')
+            
+            email_query = user_table.where('email', '==', request.data.get('email')) # Limiting to 1 document
+            email_docs = email_query.get()
+            
+            if len(email_docs) > 0:
+                return Response({'error': 'Email already exists.'}, status=400)
+            
+            username_query = user_table.where('username', '==', request.data.get('username')) # Limiting to 1 document
+            username_docs = username_query.get()
+            if len(username_docs) > 0:
+                return Response({'error':'Username already exists.'}, status=400)
+            
+            validated_data['password'] = make_password(validated_data['password'])
+            
+            timezone = pytz.timezone('Asia/Singapore')
+            current_datetime = datetime.datetime.now(timezone)
+            validated_data['created_date'] = current_datetime
+            
+            
+            user_document_ref = user_table.add(validated_data)[1]
+            print(user_document_ref)
+            
+            # do token 
+            expiration_time = current_datetime + timedelta(days=10)
+            payload = {
+                'uid': user_document_ref.id,
+                'exp': expiration_time  # Expiration time
+            }
+            token = jwt.encode(payload, key=None, algorithm=None) 
+            user_document_ref.update({'token':token})
+            return Response({'token': token}, status=201)
+        return Response(serializer.errors, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 # Done
 @api_view(['PUT'])
@@ -138,7 +144,7 @@ def updateDetail(request):
             user_table = db.collection('user')
             user_row = user_table.document(user_id)
             user_data = user_row.get().to_dict()
-            print(user_data)
+
             email_query = user_table.where('email', '==', request.data.get('email'))
             email_docs = list(email_query.stream())
             print(email_docs)
