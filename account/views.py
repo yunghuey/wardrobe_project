@@ -28,7 +28,6 @@ def registerUser(request):
             return Response({'error':'Username already exists.'}, status=400)
 
         validated_data['password'] = make_password(validated_data['password'])
-        validated_data['is_logged'] = True
         
         timezone = pytz.timezone('Asia/Singapore')
         current_datetime = datetime.datetime.now(timezone)
@@ -57,7 +56,7 @@ def logoutUser(request):
         db = firestore.client()
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         if not token:
-            return Response({'error': 'no token found'}, stauts=404)
+            return Response({'error': 'no token found'}, status=404)
         try:
         # Decode the JWT token
             print(token)
@@ -65,7 +64,6 @@ def logoutUser(request):
             user_id = decoded_token.get('uid') or decoded_token.get('user_id')
             user_table = db.collection('user')
             user_row = user_table.document(user_id)
-            user_row.update({'is_logged': False})
             user_row.update({'token': firestore.DELETE_FIELD})
             return Response({'message': 'successfully logout'}, status=200)
         except jwt.ExpiredSignatureError:
@@ -113,11 +111,12 @@ def getUserDetail(request):
             db = firestore.client()
             user_table = db.collection('user')
             user_row = user_table.document(user_id)
-            doc_snapshot = user_row.get()
-            if doc_snapshot.exists:
-                user_data = doc_snapshot.to_dict()
-                user_data['id'] = user_id
-                return Response({'user': user_data}, status=200)
+            doc_snapshot = user_row.get().to_dict()
+            del doc_snapshot['password']
+            del doc_snapshot['token']
+            del doc_snapshot['created_date']
+            
+            return Response({'user': doc_snapshot}, status=200)
         else:
             return Response({'error': 'User not found'}, status=404)
     except jwt.ExpiredSignatureError:
@@ -193,7 +192,7 @@ def login(request):
                 user_row = user_table.document(user_id)
                 user_row.update({'token': token})
                 return Response({'token':token}, status=200)
-            return Response({'error':'wrong password'}, status=400)
+            return Response({'error':'password wrong'}, status=400)
         return Response({'error': 'Username and password is wrong'}, stauts=400)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
