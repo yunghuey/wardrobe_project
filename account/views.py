@@ -112,7 +112,7 @@ def getUserDetail(request):
     try:
         # Decode the JWT token
         decoded_token = jwt.decode(token, options={"verify_signature": False})
-        user_id = decoded_token['uid']
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         if user_id:
             db = firestore.client()
             user_table = db.collection('user')
@@ -126,10 +126,11 @@ def getUserDetail(request):
         else:
             return Response({'error': 'User not found'}, status=404)
     except jwt.ExpiredSignatureError:
-        return Response({"error": "Token has expired"}, status=400)
+        return Response({"error": "Token has expired"}, status=405)
     except jwt.InvalidTokenError:
-        return Response({'token': "Invalid token"}, status=400) 
+        return Response({'token': "Invalid token"}, status=405) 
     except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
     
 @api_view(['PUT'])
@@ -137,8 +138,7 @@ def updateDetail(request):
     token = request.headers.get('Authorization','').split('Bearer ')[-1]
     try:
         decoded_token = jwt.decode(token, options={"verify_signature": False})
-        print(decoded_token)
-        user_id = decoded_token['uid']
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         if user_id:
             db = firestore.client()
             user_table = db.collection('user')
