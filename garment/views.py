@@ -282,6 +282,8 @@ def process_data(image_64):
     brand_ocr = []
     dump_store = []
     dump_store2 = []
+    cottonon_size = []
+
     result_json = {}
     try:
         image_data = base64.b64decode(image_64)
@@ -294,20 +296,22 @@ def process_data(image_64):
                 paddle_texts.append(line[1][0])
     
         # Perform OCR using EasyOCR
-        
-        text_ = reader.readtext(img, batch_size=5)
+        imggrey = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
+        text_ = reader.readtext(imggrey, batch_size=5)
         for t in text_:
             if t[2] > 0.55:
                 paddle_texts.append(t[1])
         # do sorting
         for i in range(len(paddle_texts)):
-            if not paddle_texts[i].isdigit() and not any(char in string.punctuation for char in paddle_texts[i]) :
-                dump_store.append(paddle_texts[i])
+                if not paddle_texts[i].isdigit() :
+                    paddle_texts[i] = ''.join(char for char in paddle_texts[i] if not char in string.punctuation)
+                    dump_store.append(paddle_texts[i])
         print('pass2')
                 
         # find sizes
         found_size = False
         for s in dump_store:
+            print(f"size: {s}")
             if not found_size:
                 if (s.upper() in [size.upper() for size in SIZES]) and (s not in size_ocr):
                     size_ocr.append(s.upper())
@@ -323,24 +327,17 @@ def process_data(image_64):
                             size_ocr.append(valid_zara[0])
                             print(valid_zara)
                             break
+                
                 elif len(s) >= 3:
                     dump_store2.append(s)
+            # if found_size: 
+            #     break  
             elif len(s) >= 3:
                 dump_store2.append(s)
 
         if found_size is False:
-            for s in dump_store:
-                if ('I' in s.upper() or 'i' in s or 'GG' in s.upper() or 'PP' in s.upper()) and len(s) <= 7 and not re.search(r'\s', s):
-                    # special for cotton on
-                    print('inside cotton on area')
-                    if s.upper().__contains__("GG"):
-                        size_ocr.append("XL")
-                        found_size = True
-                    else:
-                        get_size = [size for size in SIZES if size.upper() in s.upper() and (s not in size_ocr)] 
-                        if get_size:
-                            size_ocr.append(get_size[0].upper())
-                            found_size = True
+            cottonon_size = dump_store
+            
         # find country
         dump_store = []
         found_country = False
@@ -385,6 +382,22 @@ def process_data(image_64):
                 else:
                     dump_store.append(b1)
 
+        # new enhancement to increase readability
+        if (found_size == False and found_country == True) and (brand_ocr[0] == 'TOMMYHILFIGER' or brand_ocr[0] == 'COTTON ON') :
+            for s in cottonon_size:
+                print(f"Cotton {s}")
+                if ('I' in s.upper() or 'i' in s or 'GG' in s.upper() or 'PP' in s.upper()) and len(s) <= 7 and not re.search(r'\s', s):
+                    # special for cotton on
+                    print('inside cotton on area')
+                    if s.upper().__contains__("GG"):
+                        size_ocr.append("XL")
+                        found_size = True
+                    else:
+                        get_size = [size for size in SIZES if size.upper() in s.upper() and (s not in size_ocr)] 
+                        if get_size:
+                            size_ocr.append(get_size[0].upper())
+                            found_size = True
+                            
         # get colour code
         color_code = get_color(img)
         
@@ -415,13 +428,18 @@ def process_data(image_64):
 # read image
 @api_view(['POST'])
 def processGarmentImage(request):
-    print('received')
-    result_json = {}
-    image64 = request.data.get('image')
-    if image64 is not None and image64 != '':
-        result_json = process_data(image64)
-        # result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
-        
-        return Response({'result': result_json}, status=200)
-    else:
-        return Response({'error': 'Failed'}, status=400)  
+    try:
+        print('received')
+        result_json = {}
+        image64 = request.data.get('image')
+        if image64 is not None and image64 != '':
+            result_json = process_data(image64)
+            # result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
+            
+            return Response({'result': result_json}, status=200)
+        else:
+            return Response({'error': 'Failed'}, status=400) 
+    except Exception as e:
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        print(f"An exception occurred on line {exc_tb.tb_lineno}: {e}")
+        traceback.print_exc()

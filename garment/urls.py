@@ -5,7 +5,7 @@ urlpatterns = [
     path('getAll/', views.getAllGarments),
     path('getGarment/<str:garment_id>', views.getGarment),
     path ('add/', views.addGarment),
-    # datatype:paramter name at the function 
+    path ('submitImage', views.processGarmentImage),
     path ('update/<str:garment_id>', views.updateGarment),
     path ('delete/', views.deleteGarment),
     path('add', views.processGarmentImage),
