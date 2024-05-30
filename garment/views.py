@@ -443,3 +443,41 @@ def processGarmentImage(request):
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print(f"An exception occurred on line {exc_tb.tb_lineno}: {e}")
         traceback.print_exc()
+
+@api_view(['PUT'])
+def getStatisticNumber(request):
+    # check for header token
+    try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            garmentresult = {}
+            totalGarmentNo = getTotalGarmentNo(user_id)
+            garmentresult['totalGarment'] = totalGarmentNo
+            return Response(garmentresult, status=200)
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400)  
+    except Exception as e:
+        return Response({'error':str(e)}, status=400)
+    
+
+    
+    # put in dictionary to return
+   
+def getTotalGarmentNo(user_id):
+    try:
+        db = firestore.client()
+        collection_ref = db.collection('garment')
+        query = collection_ref.where('user_id','==',user_id)
+        # execute the query and get a result
+        query_snapshot = query.stream()
+        # count the number of documents in snapshot
+        count = sum(1 for _ in query_snapshot)
+        return count
+    except Exception as e:
+        return 0
+    
+    

@@ -9,4 +9,5 @@ urlpatterns = [
     path ('update/<str:garment_id>', views.updateGarment),
     path ('delete/', views.deleteGarment),
     path('add', views.processGarmentImage),
+    path('getInfo', views.getStatisticNumber),
 ]
