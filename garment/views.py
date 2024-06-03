@@ -446,166 +446,158 @@ def processGarmentImage(request):
 
 @api_view(['GET'])
 def getColourAnalysis(request):
+    result = {}
     try:
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
-        garmentresult = {}
-        
         if user_id:
             db = firestore.client()
-            garment_ref = db.collection('garment')
-            query = garment_ref.where('user_id', '==',user_id)
+
+            collection_ref = db.collection('garment')
+            query = collection_ref.where('user_id', '==', user_id)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
                 doc_dict = doc.to_dict()
                 colour = doc_dict.get('colour_name', 'Unknown')
-                if colour not in garmentresult:
-                    garmentresult[colour] = {
-                        'country': {},
+                if colour not in result:
+                    result[colour] = {
                         'size': {},
+                        'country': {},
                         'brand': {},
                         'total_num': 0
                     }
 
-                if 'country' in doc_dict:
-                    country = doc_dict['country']
-                    if country in garmentresult[colour]['country']:
-                        garmentresult[colour]['country'][country] += 1
-                    else:
-                        garmentresult[colour]['country'][country] = 1
-
                 if 'size' in doc_dict:
                     size = doc_dict['size']
-                    if size in garmentresult[colour]['size']:
-                        garmentresult[colour]['size'][size] += 1
+                    if size in result[colour]['size']:
+                        result[colour]['size'][size] += 1
                     else:
-                        garmentresult[colour]['size'][size] = 1
+                        result[colour]['size'][size] = 1
+
+                if 'country' in doc_dict:
+                    country = doc_dict['country']
+                    if country in result[colour]['country']:
+                        result[colour]['country'][country] += 1
+                    else:
+                        result[colour]['country'][country] = 1
 
                 if 'brand' in doc_dict:
                     brand = doc_dict['brand']
-                    print(f"Processing country: {brand}")
-                    if brand in garmentresult[colour]['brand']:
-                        garmentresult[colour]['brand'][brand] += 1
+                    if brand in result[colour]['brand']:
+                        result[colour]['brand'][brand] += 1
                     else:
-                        garmentresult[colour]['brand'][brand] = 1
-                garmentresult[colour]['total_num'] += 1
-                    
-            for colour in garmentresult:
-                garmentresult[colour]['country'] = [
-                    {colour: count} for colour, count in garmentresult[colour]['country'].items()
+                        result[colour]['brand'][brand] = 1
+                result[colour]['total_num'] += 1
+
+            # convert into list of dictionaries
+            for colour in result:
+                result[colour]['size'] = [
+                    {size: count} for size, count in result[colour]['size'].items()
                 ]
-                garmentresult[colour]['size'] = [
-                    {size: count} for size, count in garmentresult[colour]['size'].items()
+                result[colour]['country'] = [
+                    {country: count} for country, count in result[colour]['country'].items()
                 ]
-                garmentresult[colour]['brand'] = [
-                    {brand: count} for brand, count in garmentresult[colour]['brand'].items()
+                result[colour]['brand'] = [
+                    {brand: count} for brand, count in result[colour]['brand'].items()
                 ]
-                return Response(garmentresult, status=200)
-        return Response({'error':'problem in token'}, status=400)
-    
+            return Response(result, status=200)
     except jwt.ExpiredSignatureError:
-    # Token has expired
         return Response({"error": "Token has expired"}, status=400)
     except jwt.InvalidTokenError:
-    # Token is invalid
-        return Response({'token': "Invalid token"}, status=400)
+        return Response({'token': "Invalid token"}, status=400)  
     except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
-
-
+ 
 @api_view(['GET'])
 def getSizeAnalysis(request):
+    result = {}
     try:
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
-        garmentresult = {}
-        
         if user_id:
             db = firestore.client()
-            garment_ref = db.collection('garment')
-            query = garment_ref.where('user_id', '==',user_id)
+
+            collection_ref = db.collection('garment')
+            query = collection_ref.where('user_id', '==', user_id)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
                 doc_dict = doc.to_dict()
                 size = doc_dict.get('size', 'Unknown')
-                if size not in garmentresult:
-                    garmentresult[size] = {
+                if size not in result:
+                    result[size] = {
+                        'colour_name': {},
                         'country': {},
-                        'colour': {},
                         'brand': {},
                         'total_num': 0
                     }
 
-                if 'country' in doc_dict:
-                    country = doc_dict['country']
-                    if country in garmentresult[size]['country']:
-                        garmentresult[size]['country'][country] += 1
-                    else:
-                        garmentresult[size]['country'][country] = 1
-
                 if 'colour_name' in doc_dict:
                     colour = doc_dict['colour_name']
-                    if size in garmentresult[size]['colour']:
-                        garmentresult[size]['colour'][colour] += 1
+                    if colour in result[size]['colour_name']:
+                        result[size]['colour_name'][colour] += 1
                     else:
-                        garmentresult[size]['colour'][colour] = 1
+                        result[size]['colour_name'][colour] = 1
+
+                if 'country' in doc_dict:
+                    country = doc_dict['country']
+                    if country in result[size]['country']:
+                        result[size]['country'][country] += 1
+                    else:
+                        result[size]['country'][country] = 1
 
                 if 'brand' in doc_dict:
                     brand = doc_dict['brand']
-                    print(f"Processing country: {brand}")
-                    if brand in garmentresult[size]['brand']:
-                        garmentresult[size]['brand'][brand] += 1
+                    if brand in result[size]['brand']:
+                        result[size]['brand'][brand] += 1
                     else:
-                        garmentresult[size]['brand'][brand] = 1
-                garmentresult[size]['total_num'] += 1
-                    
-            for size in garmentresult:
-                garmentresult[size]['country'] = [
-                    {colour: count} for colour, count in garmentresult[size]['country'].items()
+                        result[size]['brand'][brand] = 1
+                result[size]['total_num'] += 1
+
+            # convert into list of dictionaries
+            for size in result:
+                result[size]['colour_name'] = [
+                    {colour: count} for colour, count in result[size]['colour_name'].items()
                 ]
-                garmentresult[size]['colour'] = [
-                    {colour: count} for colour, count in garmentresult[size]['colour'].items()
+                result[size]['country'] = [
+                    {country: count} for country, count in result[size]['country'].items()
                 ]
-                garmentresult[size]['brand'] = [
-                    {brand: count} for brand, count in garmentresult[size]['brand'].items()
+                result[size]['brand'] = [
+                    {brand: count} for brand, count in result[size]['brand'].items()
                 ]
-                return Response(garmentresult, status=200)
-        return Response({'error':'problem in token'}, status=400)
-    
+            return Response(result, status=200)
     except jwt.ExpiredSignatureError:
-    # Token has expired
         return Response({"error": "Token has expired"}, status=400)
     except jwt.InvalidTokenError:
-    # Token is invalid
-        return Response({'token': "Invalid token"}, status=400)
+        return Response({'token': "Invalid token"}, status=400)  
     except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
-
+ 
 @api_view(['GET'])
 def getCountryAnalysis(request):
+    result = {}
     try:
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
-        
-        garmentresult = {}
         if user_id:
             db = firestore.client()
-            garment_ref = db.collection('garment')
-            query = garment_ref.where('user_id', '==',user_id)
+
+            collection_ref = db.collection('garment')
+            query = collection_ref.where('user_id', '==', user_id)
             query_snapshot = query.stream()
-            
             for doc in query_snapshot:
                 # Convert document to dictionary
                 doc_dict = doc.to_dict()
                 country = doc_dict.get('country', 'Unknown')
-                print("successs")
-                if country not in garmentresult:
-                    garmentresult[country] = {
+                print(country)
+                if country not in result:
+                    result[country] = {
                         'colour_name': {},
                         'size': {},
                         'brand': {},
@@ -614,48 +606,48 @@ def getCountryAnalysis(request):
 
                 if 'colour_name' in doc_dict:
                     colour = doc_dict['colour_name']
-                    if colour in garmentresult[country]['colour_name']:
-                        garmentresult[country]['colour_name'][colour] += 1
+                    if colour in result[country]['colour_name']:
+                        result[country]['colour_name'][colour] += 1
                     else:
-                        garmentresult[country]['colour_name'][colour] = 1
+                        result[country]['colour_name'][colour] = 1
 
                 if 'size' in doc_dict:
                     size = doc_dict['size']
-                    if size in garmentresult[country]['size']:
-                        garmentresult[country]['size'][size] += 1
+                    if size in result[country]['size']:
+                        result[country]['size'][size] += 1
                     else:
-                        garmentresult[country]['size'][size] = 1
+                        result[country]['size'][size] = 1
 
                 if 'brand' in doc_dict:
                     brand = doc_dict['brand']
-                    print(f"Processing country: {brand}")
-                    if brand in garmentresult[country]['brand']:
-                        garmentresult[country]['brand'][brand] += 1
+                    if brand in result[country]['brand']:
+                        result[country]['brand'][brand] += 1
                     else:
-                        garmentresult[country]['brand'][brand] = 1
-                garmentresult[country]['total_num'] += 1
-            
-        for country in garmentresult:
-            garmentresult[country]['colour_name'] = [
-                {colour: count} for colour, count in garmentresult[country]['colour_name'].items()
-            ]
-            garmentresult[country]['size'] = [
-                {size: count} for size, count in garmentresult[country]['size'].items()
-            ]
-            garmentresult[country]['brand'] = [
-                {brand: count} for brand, count in garmentresult[country]['brand'].items()
-            ]
-            return Response(garmentresult, status=200)
-        return Response({'error':'problem in token'}, status=400)
+                        result[country]['brand'][brand] = 1
+                result[country]['total_num'] += 1
+
+            # convert into list of dictionaries
+            for country in result:
+                result[country]['colour_name'] = [
+                    {colour: count} for colour, count in result[country]['colour_name'].items()
+                ]
+                result[country]['size'] = [
+                    {size: count} for size, count in result[country]['size'].items()
+                ]
+                result[country]['brand'] = [
+                    {brand: count} for brand, count in result[country]['brand'].items()
+                ]
+            # garmentresult['brandResult'] = result
+            return Response(result, status=200)
     except jwt.ExpiredSignatureError:
-    # Token has expired
         return Response({"error": "Token has expired"}, status=400)
     except jwt.InvalidTokenError:
-    # Token is invalid
-        return Response({'token': "Invalid token"}, status=400)
+        return Response({'token': "Invalid token"}, status=400)  
     except Exception as e:
-        return Response({'error':str(e)}, status=400)
+        print(str(e))
 
+        return Response({'error':str(e)}, status=400)
+   
 @api_view(['GET'])
 def getBrandAnalysis(request):
     result = {}
@@ -698,7 +690,6 @@ def getBrandAnalysis(request):
 
                 if 'country' in doc_dict:
                     country = doc_dict['country']
-                    print(f"Processing country: {country}")
                     if country in result[brand]['country']:
                         result[brand]['country'][country] += 1
                     else:
