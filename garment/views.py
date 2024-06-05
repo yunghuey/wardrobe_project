@@ -148,17 +148,19 @@ def addGarment(request):
                 
                 garment_documentID = garment_reference.add(garment_data)
                 new_garment = garment_documentID[1].id
-                garmentBase64Image = request.data.get('image')
-                materialBase64Image= request.data.get('material')
-                binaryOfGarmentImg = base64.b64decode(garmentBase64Image)
-                binaryOfMaterialImg = base64.b64decode(materialBase64Image)
-
+                
                 firebase_storage = storage.bucket()
+                
+                garmentBase64Image = request.data.get('image')
+                binaryOfGarmentImg = base64.b64decode(garmentBase64Image)
                 garment_filename = new_garment+ "_garment.jpg"
-                material_filename = new_garment+ "_material.jpg"
                 blob1 = firebase_storage.blob(garment_filename)
-                blob2 = firebase_storage.blob(material_filename)
                 blob1.upload_from_string(binaryOfGarmentImg,content_type='image/jpeg')
+                
+                materialBase64Image= request.data.get('material')
+                binaryOfMaterialImg = base64.b64decode(materialBase64Image)
+                material_filename = new_garment+ "_material.jpg"
+                blob2 = firebase_storage.blob(material_filename)
                 blob2.upload_from_string(binaryOfMaterialImg,content_type='image/jpeg')
                 
                 image_url = f"https://storage.googleapis.com/{firebase_storage.name}/{garment_filename}"
@@ -194,8 +196,17 @@ def updateGarment(request, garment_id):
             doc_ref = garment_ref.document(garment_id) # get garment document by ID
             garment_data = doc_ref.get().to_dict() # convert into readable data
             #update garment data with request data
-            garment_data.update(request.data)
-            # save updated data into firestore
+            
+            request_data = request.data.copy()
+            materialList = request.data.get('materialList')
+        
+            if materialList is not None:
+                request_data['material'] = {}
+                for material in materialList:
+                    print(material['percentage'])
+                    request_data['material'][material['material_name']] = material['percentage']
+            
+            garment_data.update(request_data)
             doc_ref.set(garment_data)
             return Response(garment_data, status=200)
         return Response({'error':'problem in token'}, status=400)
@@ -212,7 +223,6 @@ def updateGarment(request, garment_id):
 # delete - make inactive
 @api_view(['DELETE'])
 def deleteGarment(request):
-    print('hello')
     try:
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
