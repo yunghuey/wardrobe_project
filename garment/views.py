@@ -93,6 +93,31 @@ def handle_base64_image(image_data):
     image_file = ContentFile(decoded_image)
     return image_file
 
+@api_view(['POST'])
+def detectMaterial(request):
+    token = request.headers.get('Authorization','').split('Bearer ')[-1]
+    try:
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        image64 = request.data.get('image')
+        if user_id and image64 is not None and image64 != '':
+            # call function to process image
+            result = [
+                { "material": "COTTON", "percentage" : 60,},
+                {"material": "WOOL", "percentage" : 10,},
+                {"material": "SILK", "percentage" : 10},
+                {"material": "NYLON", "percentage" : 20}
+            ]
+            
+        return Response({"result": result}, status=201)
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "Token has expired"}, status=400)
+    except jwt.InvalidTokenError:
+        return Response({'token': "Invalid token"}, status=400) 
+    except Exception as e:
+        print(str(e))
+        return Response({'error': str(e)}, status=400)
+
 # done
 @api_view(['POST'])
 def addGarment(request):
@@ -111,20 +136,35 @@ def addGarment(request):
                 timezone = pytz.timezone('Asia/Singapore')
                 currentdatetime = datetime.datetime.now(timezone)
                 
+                garment_data = serializer.validated_data
                 garment_data['created_date'] = currentdatetime
-                garment_data['user_id'] =  user_id
+                garment_data['user_id'] = user_id
+                materiallist=  request.data.get('materialList')
+                if materiallist is not None:
+                    garment_data['material'] = {}
+                    for material in materiallist:
+                        garment_data['material'][material['material_name']] = material['percentage']
+                
+                
                 garment_documentID = garment_reference.add(garment_data)
                 new_garment = garment_documentID[1].id
-                base64Image = request.data.get('image')
-                binary_data = base64.b64decode(base64Image)
+                garmentBase64Image = request.data.get('image')
+                materialBase64Image= request.data.get('material')
+                binaryOfGarmentImg = base64.b64decode(garmentBase64Image)
+                binaryOfMaterialImg = base64.b64decode(materialBase64Image)
 
                 firebase_storage = storage.bucket()
-                filename = new_garment+ ".jpg"
-                blob = firebase_storage.blob(filename)
-                blob.upload_from_string(binary_data,content_type='image/jpeg')
+                garment_filename = new_garment+ "_garment.jpg"
+                material_filename = new_garment+ "_material.jpg"
+                blob1 = firebase_storage.blob(garment_filename)
+                blob2 = firebase_storage.blob(material_filename)
+                blob1.upload_from_string(binaryOfGarmentImg,content_type='image/jpeg')
+                blob2.upload_from_string(binaryOfMaterialImg,content_type='image/jpeg')
                 
-                image_url = f"https://storage.googleapis.com/{firebase_storage.name}/{filename}"
+                image_url = f"https://storage.googleapis.com/{firebase_storage.name}/{garment_filename}"
+                image2_url = f"https://storage.googleapis.com/{firebase_storage.name}/{material_filename}"
                 garment_reference.document(new_garment).update({'image_url': image_url})
+                garment_reference.document(new_garment).update({'material_url': image2_url})
                 
                 response_data = {'response':"success"}
                 return Response(response_data,status=201)
@@ -136,6 +176,8 @@ def addGarment(request):
     except jwt.InvalidTokenError:
         return Response({'token': "Invalid token"}, status=400) 
     except Exception as e:
+        
+        print(str(e))
         return Response({'error': str   (e)}, status=400)
 
 # DONE
@@ -429,12 +471,11 @@ def process_data(image_64):
 @api_view(['POST'])
 def processGarmentImage(request):
     try:
-        print('received')
         result_json = {}
         image64 = request.data.get('image')
         if image64 is not None and image64 != '':
-            result_json = process_data(image64)
-            # result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
+            # result_json = process_data(image64)
+            result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
             
             return Response({'result': result_json}, status=200)
         else:

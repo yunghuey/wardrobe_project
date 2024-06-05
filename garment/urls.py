@@ -13,6 +13,6 @@ urlpatterns = [
     path('getBrandAnalysis', views.getBrandAnalysis),
     path('getCountryAnalysis', views.getCountryAnalysis),
     path('getColourAnalysis', views.getColourAnalysis),
-    path('getSizeAnalysis', views.getSizeAnalysis)
-
+    path('getSizeAnalysis', views.getSizeAnalysis),
+    path('detectMaterial', views.detectMaterial)
 ]
