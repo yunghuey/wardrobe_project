@@ -44,7 +44,7 @@ def getTemperatureHumidity(request):
     except Exception as e:
         return Response({'error':str(e)}, status=400)
 
-@api_view(['GET'])
+@api_view(['POST'])
 def getRecommendedClothes(request):
     try:
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
@@ -71,21 +71,22 @@ def getRecommendedClothes(request):
             for garment in garments_list:
                 garment_dict = garment.to_dict()
                 garment_dict['id'] = garment.id
-                material_list = garment_dict.get('materialList',[])
-                
+                material_list = garment_dict.get('material')    
                 if humidity > 31:
-                    if not any(material.get('material_name', '').upper() == 'COTTON' for material in material_list):
+                    if 'COTTON' in material_list:
+                    # for m in material_list:
+                        
+                        # for key, value, in m.items():
+                            # if key == 'COTTON':
                         garment_data.append(garment_dict)
-            
+                                
             if not garment_data:
                 return Response({'message': 'No garments found.'}, status=204)
             else:
                 return Response({'garments':garment_data}, status=200)
-            # else: 
-            #     query = garment_collection.where('user_id','==',user_id).where('materialList','array-contains',{'COTTON'})
-
 
         return Response(result, status=204)
     except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
     

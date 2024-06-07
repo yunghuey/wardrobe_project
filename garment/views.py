@@ -293,7 +293,6 @@ def updateGarment(request, garment_id):
             #update garment data with request data
             
             request_data = request.data.copy()
-            materiallist = request.data.get('material')
             garment_data['brand'] = request.data.get('brand')
             garment_data['name'] = request.data.get('name')
             garment_data['colour_name'] = request.data.get('colour_name')
@@ -301,7 +300,9 @@ def updateGarment(request, garment_id):
             garment_data['size']= request.data.get('size')
             garment_data['country'] = request.data.get('country')
             
+            materiallist = request_data.get('material')
             if materiallist is not None:
+                garment_data['material'] = {}  # Initialize the 'material' field
                 for material in materiallist:
                     for key, value in material.items():
                         garment_data['material'][key] = value
@@ -585,8 +586,8 @@ def processGarmentImage(request):
         result_json = {}
         image64 = request.data.get('image')
         if image64 is not None and image64 != '':
-            # result_json = process_data(image64)
-            result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
+            result_json = process_data(image64)
+            # result_json ={'colour': '#9ba666', 'colour_name': 'GREEN', 'size': 'S', 'country': 'INDONESIA', 'brand': 'ASICS'}
             
             return Response({'result': result_json}, status=200)
         else:
