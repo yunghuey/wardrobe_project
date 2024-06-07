@@ -23,10 +23,17 @@ import pytz
 import jwt
 
 SIZES = ['2XS','XS', 'S', 'M', 'XXL', 'XL','L']
-CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA', 'CAMBODIA', 'BANGLADESH', 'LAOS', 'TURKEY', 'MOROCCO', 'PAKISTAN','VIETNAM', 'THAILAND', 'HONGKONG', 'SRILANKA']
-BRANDS_NAME = ['SKECHERS', 'ADIDAS', 'UNIQLO', 'ZARA','NIKE', 'COTTON ON', 'JORDAN','ASICS','NEW BALANCE',' TOMMYHILFIGER']
-COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GREEN', 'YELLOW', 'ORANGE YELLOW', 'ORANGE','WHITE','BLACK', 'GREY']
-
+CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA',
+                   'CAMBODIA', 'BANGLADESH', 'LAOS', 'TURKEY', 'MOROCCO', 
+                   'PAKISTAN','VIETNAM', 'THAILAND', 'HONGKONG', 'SRILANKA']
+BRANDS_NAME = ['SKECHERS', 'ADIDAS', 'UNIQLO', 'ZARA','NIKE', 'COTTON ON', 
+               'JORDAN','ASICS','NEW BALANCE',' TOMMYHILFIGER']
+COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GREEN',
+               'YELLOW', 'ORANGE YELLOW', 'ORANGE','WHITE','BLACK', 'GREY']
+MATERIAL_NAME = ['COTTON', 'OTHERS', 'NYLON', 'VISCOSE','WOOL',
+                 'ELASTANE','CASHMERE', 'SPANDEX',
+                 'RAYON','ACRYLIC','ELASTANE','POLYESTER',
+                 'POLYAMIDE','MOHAIR']
 # done
 """ GET ALL GARMENTS - will remove soon because dont have this function"""
 @api_view(['GET'])
@@ -93,6 +100,91 @@ def handle_base64_image(image_data):
     image_file = ContentFile(decoded_image)
     return image_file
 
+def extract_percentage(text):
+    percent_start = text.find("%") or text.find("X")
+    if percent_start == -1:
+        return None  # No percentage symbol found
+    end = percent_start - 1
+    while end >= 0 and text[end].isdigit():
+        end -= 1
+    percentage = text[end+1:percent_start]
+    if percentage.isdigit():
+        return percentage
+    else: 
+        return None
+    
+def process_material(image_64):
+    ocr = PaddleOCR(lang="en", use_gpu=False, model="ppocrv2")
+    paddle_texts = []
+    materials = []
+    pending_percentage = None
+
+    try:
+        image_data = base64.b64decode(image_64)
+        image_array = np.frombuffer(image_data, np.uint8)
+        img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        # paddleOCR
+        result = ocr.ocr(img)
+        paddle_texts = [line[1][0] for line in result if line[1][1] > 0.9]
+        for text in paddle_texts:
+            if 'RIB' in text.upper():
+                break                
+            
+            # split with . or ,
+            pairs = re.split(r'([.,])', text)
+            
+            for pair in pairs:
+                # print(f"Pair is {pair}")
+                if not pending_percentage:
+                    percentage = extract_percentage(pair)
+                
+                    if percentage:
+                        pending_percentage = percentage
+                
+                valid_material = [m for m in MATERIAL_NAME if m.upper() in pair.upper()]
+                if valid_material and pending_percentage:
+                    
+                    # to prevent exceed 100%
+                    totalpercentage = 0
+                    for aa in materials:
+                        totalpercentage += aa['percentage']
+                    
+                    if totalpercentage < 100:
+                        material_info = {
+                            "material": valid_material[0],
+                            "percentage": float(percentage) 
+                        }
+                        materials.append(material_info)
+                        pending_percentage = None
+                    else:
+                        break
+        # check if enough 100
+        totalpercentage = 0
+        for aa in materials:
+            totalpercentage += aa['percentage']
+            
+        if totalpercentage < 100:
+            cotton_exist = False
+            for mat in materials:
+                if mat['material'] == "COTTON":
+                    mat['percentage'] += 100-totalpercentage
+                    cotton_exist= True
+                    break
+            
+            if not cotton_exist:
+                material_info = {
+                    "material": 'COTTON',
+                    "percentage": 100 - totalpercentage
+                }
+                materials.append(material_info)
+        return materials
+        
+    except Exception as e:
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        print(f"An exception occurred on line {exc_tb.tb_lineno}: {e}")
+        traceback.print_exc()
+        return []
+        
 @api_view(['POST'])
 def detectMaterial(request):
     token = request.headers.get('Authorization','').split('Bearer ')[-1]
@@ -102,12 +194,13 @@ def detectMaterial(request):
         image64 = request.data.get('image')
         if user_id and image64 is not None and image64 != '':
             # call function to process image
-            result = [
-                { "material": "COTTON", "percentage" : 60,},
-                {"material": "WOOL", "percentage" : 10,},
-                {"material": "SILK", "percentage" : 10},
-                {"material": "NYLON", "percentage" : 20}
-            ]
+            result = process_material(image64)
+            # result = [
+            #     { "material": "COTTON", "percentage" : 60,},
+            #     {"material": "WOOL", "percentage" : 10,},
+            #     {"material": "SILK", "percentage" : 10},
+            #     {"material": "NYLON", "percentage" : 20}
+            # ]
             
         return Response({"result": result}, status=201)
     except jwt.ExpiredSignatureError:
@@ -506,7 +599,7 @@ def getColourAnalysis(request):
             db = firestore.client()
 
             collection_ref = db.collection('garment')
-            query = collection_ref.where('user_id', '==', user_id)
+            query = collection_ref.where('user_id', '==', user_id).where('status','==', True)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
@@ -573,7 +666,7 @@ def getSizeAnalysis(request):
             db = firestore.client()
 
             collection_ref = db.collection('garment')
-            query = collection_ref.where('user_id', '==', user_id)
+            query = collection_ref.where('user_id', '==', user_id).where('status','==', True)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
@@ -640,7 +733,7 @@ def getCountryAnalysis(request):
             db = firestore.client()
 
             collection_ref = db.collection('garment')
-            query = collection_ref.where('user_id', '==', user_id)
+            query = collection_ref.where('user_id', '==', user_id).where('status','==', True)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
@@ -711,7 +804,7 @@ def getBrandAnalysis(request):
             db = firestore.client()
 
             collection_ref = db.collection('garment')
-            query = collection_ref.where('user_id', '==', user_id)
+            query = collection_ref.where('user_id', '==', user_id).where('status','==', True)
             query_snapshot = query.stream()
             for doc in query_snapshot:
                 # Convert document to dictionary
@@ -779,7 +872,7 @@ def getTotalGarmentNo(request):
         if user_id:
             db = firestore.client()
             collection_ref = db.collection('garment')
-            query = collection_ref.where('user_id','==',user_id)
+            query = collection_ref.where('user_id', '==', user_id).where('status','==', True)
             # execute the query and get a result
             query_snapshot = query.stream()
             # count the number of documents in snapshot
