@@ -32,7 +32,7 @@ COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GR
                'YELLOW', 'ORANGE YELLOW', 'ORANGE','WHITE','BLACK', 'GREY']
 MATERIAL_NAME = ['COTTON', 'OTHERS', 'NYLON', 'VISCOSE','WOOL',
                  'ELASTANE','CASHMERE', 'SPANDEX',
-                 'RAYON','ACRYLIC','ELASTANE','POLYESTER',
+                 'RAYON','ACRYLIC','POLYESTER',
                  'POLYAMIDE','MOHAIR']
 # done
 """ GET ALL GARMENTS - will remove soon because dont have this function"""
@@ -232,11 +232,13 @@ def addGarment(request):
                 garment_data = serializer.validated_data
                 garment_data['created_date'] = currentdatetime
                 garment_data['user_id'] = user_id
-                materiallist=  request.data.get('materialList')
+                materiallist=  request.data.get('material')
                 if materiallist is not None:
+                    print(materiallist)
                     garment_data['material'] = {}
                     for material in materiallist:
-                        garment_data['material'][material['material_name']] = material['percentage']
+                        for key, value in material.items():
+                            garment_data['material'][key] = value
                 
                 
                 garment_documentID = garment_reference.add(garment_data)
@@ -250,7 +252,7 @@ def addGarment(request):
                 blob1 = firebase_storage.blob(garment_filename)
                 blob1.upload_from_string(binaryOfGarmentImg,content_type='image/jpeg')
                 
-                materialBase64Image= request.data.get('material')
+                materialBase64Image= request.data.get('materialImage')
                 binaryOfMaterialImg = base64.b64decode(materialBase64Image)
                 material_filename = new_garment+ "_material.jpg"
                 blob2 = firebase_storage.blob(material_filename)
@@ -291,15 +293,20 @@ def updateGarment(request, garment_id):
             #update garment data with request data
             
             request_data = request.data.copy()
-            materialList = request.data.get('materialList')
-        
-            if materialList is not None:
-                request_data['material'] = {}
-                for material in materialList:
-                    print(material['percentage'])
-                    request_data['material'][material['material_name']] = material['percentage']
+            materiallist = request.data.get('material')
+            garment_data['brand'] = request.data.get('brand')
+            garment_data['name'] = request.data.get('name')
+            garment_data['colour_name'] = request.data.get('colour_name')
+            garment_data['colour'] = request.data.get('colour')
+            garment_data['size']= request.data.get('size')
+            garment_data['country'] = request.data.get('country')
             
-            garment_data.update(request_data)
+            if materiallist is not None:
+                for material in materiallist:
+                    for key, value in material.items():
+                        garment_data['material'][key] = value
+            
+            
             doc_ref.set(garment_data)
             return Response(garment_data, status=200)
         return Response({'error':'problem in token'}, status=400)
@@ -310,6 +317,7 @@ def updateGarment(request, garment_id):
     # Token is invalid
         return Response({'token': "Invalid token"}, status=400)
     except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
     
 # done
