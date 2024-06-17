@@ -13,7 +13,6 @@ from datetime import timedelta
 @api_view(['POST'])
 def registerUser(request):
     try:
-        
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             validated_data = serializer.validated_data
@@ -150,6 +149,7 @@ def updateDetail(request):
             print(email_docs)
             if email_docs and email_docs[0].id != user_id:
                 return Response({'error':'Email already exists.'}, status=400)
+            
             username_query = user_table.where('username', '==', request.data.get('username'))
             username_docs = list(username_query.stream())
             if username_docs and username_docs[0].id != user_id:

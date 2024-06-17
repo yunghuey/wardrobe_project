@@ -72,15 +72,11 @@ def getRecommendedClothes(request):
                 garment_dict = garment.to_dict()
                 garment_dict['id'] = garment.id
                 material_list = garment_dict.get('material')    
-                if humidity > 31:
+                if humidity > 31.0:
                     if 'COTTON' in material_list:
-                    # for m in material_list:
-                        
-                        # for key, value, in m.items():
-                            # if key == 'COTTON':
                         garment_data.append(garment_dict)
                                 
-            if not garment_data:
+            if len(garment_data) == 0:
                 return Response({'message': 'No garments found.'}, status=204)
             else:
                 return Response({'garments':garment_data}, status=200)

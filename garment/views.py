@@ -2,6 +2,7 @@
 import base64
 import tempfile
 import datetime
+import math
 from django.core.files.base import ContentFile
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
@@ -25,7 +26,7 @@ import jwt
 SIZES = ['2XS','XS', 'S', 'M', 'XXL', 'XL','L']
 CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA',
                    'CAMBODIA', 'BANGLADESH', 'LAOS', 'TURKEY', 'MOROCCO', 
-                   'PAKISTAN','VIETNAM', 'THAILAND', 'HONGKONG', 'SRILANKA']
+                   'PAKISTAN','VIETNAM', 'THAILAND', 'HONGKONG', 'SRILANKA', 'TAIWAN']
 BRANDS_NAME = ['SKECHERS', 'ADIDAS', 'UNIQLO', 'ZARA','NIKE', 'COTTON ON', 
                'JORDAN','ASICS','NEW BALANCE',' TOMMYHILFIGER']
 COLOUR_NAME = ['RED', 'PURPLE', 'PINK', 'BLUE', 'BLUE GREEN', 'GREEN','YELLOW GREEN',
@@ -63,8 +64,7 @@ def getAllGarments(request):
     # Token is invalid
         return Response({'token': "Invalid token"}, status=400)
     except Exception as e:
-        return Response({'error':str(e)}, status=400)
-    except Exception as e:
+        print(str(e))
         return Response({'error':str(e)}, status=400)
 
 # done
@@ -101,18 +101,30 @@ def handle_base64_image(image_data):
     return image_file
 
 def extract_percentage(text):
+    print(f"Text is {text}")
     percent_start = text.find("%") or text.find("X")
-    if percent_start == -1:
-        return None  # No percentage symbol found
-    end = percent_start - 1
-    while end >= 0 and text[end].isdigit():
-        end -= 1
-    percentage = text[end+1:percent_start]
+    print(f"Percentage start: {percent_start}")
+    if (percent_start == -1):
+        # end = 0
+        # while end < len(text) and text[end].isdigit():
+        #     end += 1
+        # if end == 0:
+        #     return None
+        # else:
+        #     percentage = text[percent_start+1:end]
+        #     if float(percentage) > 100:
+        return None        
+    else:
+        end = percent_start - 1
+        while end >= 0 and text[end].isdigit():
+            end -= 1
+        percentage = text[end+1:percent_start]
+        
     if percentage.isdigit():
         return percentage
     else: 
         return None
-    
+
 def process_material(image_64):
     ocr = PaddleOCR(lang="en", use_gpu=False, model="ppocrv2")
     paddle_texts = []
@@ -125,7 +137,12 @@ def process_material(image_64):
         img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
         # paddleOCR
         result = ocr.ocr(img)
-        paddle_texts = [line[1][0] for line in result if line[1][1] > 0.9]
+        
+        for line in result:
+            print(f"data is{line[1][0]}")
+            
+        paddle_texts = [line[1][0] for line in result if line[1][1] > 0.5]
+        
         for text in paddle_texts:
             if 'RIB' in text.upper():
                 break                
@@ -134,13 +151,15 @@ def process_material(image_64):
             pairs = re.split(r'([.,])', text)
             
             for pair in pairs:
-                # print(f"Pair is {pair}")
                 if not pending_percentage:
+                    # get new percentage number
                     percentage = extract_percentage(pair)
                 
                     if percentage:
+                        # percentage = min(100, float(percentage))
                         pending_percentage = percentage
                 
+                # get material
                 valid_material = [m for m in MATERIAL_NAME if m.upper() in pair.upper()]
                 if valid_material and pending_percentage:
                     
@@ -154,15 +173,16 @@ def process_material(image_64):
                             "material": valid_material[0],
                             "percentage": float(percentage) 
                         }
+                        print(material_info)
                         materials.append(material_info)
                         pending_percentage = None
                     else:
                         break
+                    
         # check if enough 100
         totalpercentage = 0
         for aa in materials:
             totalpercentage += aa['percentage']
-            
         if totalpercentage < 100:
             cotton_exist = False
             for mat in materials:
@@ -450,11 +470,11 @@ def process_data(image_64):
                 paddle_texts.append(line[1][0])
     
         # Perform OCR using EasyOCR
-        imggrey = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
-        text_ = reader.readtext(imggrey, batch_size=5)
-        for t in text_:
-            if t[2] > 0.55:
-                paddle_texts.append(t[1])
+        # imggrey = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
+        # text_ = reader.readtext(imggrey, batch_size=5)
+        # for t in text_:
+        #     if t[2] > 0.55:
+        #         paddle_texts.append(t[1])
         # do sorting
         for i in range(len(paddle_texts)):
                 if not paddle_texts[i].isdigit() :
@@ -465,7 +485,6 @@ def process_data(image_64):
         # find sizes
         found_size = False
         for s in dump_store:
-            print(f"size: {s}")
             if not found_size:
                 if (s.upper() in [size.upper() for size in SIZES]) and (s not in size_ocr):
                     size_ocr.append(s.upper())
@@ -748,7 +767,6 @@ def getCountryAnalysis(request):
                 # Convert document to dictionary
                 doc_dict = doc.to_dict()
                 country = doc_dict.get('country', 'Unknown')
-                print(country)
                 if country not in result:
                     result[country] = {
                         'colour_name': {},
