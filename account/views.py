@@ -164,6 +164,32 @@ def updateDetail(request):
     except Exception as e:
         return Response({'error': str   (e)}, status=400)
 
+@api_view(['PUT'])
+def resetPassword(request):
+    token = request.headers.get('Authorization','').split('Bearer ')[-1]
+    try:
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        print(old_password)
+        print(new_password)
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            user_table = db.collection('user')
+            user_row = user_table.document(user_id)
+            user_data = user_row.get().to_dict()
+            print(user_data['password'])
+            # need to check for old password
+            if check_password(old_password, user_data['password']):
+                print('hello')
+                user_data.update({'password':make_password(new_password)})
+                user_row.set(user_data)
+                return Response({'message':'Password updated'}, status=200)
+            return Response({'old_password':'Password different'}, status=401)
+    except Exception as e:
+        return Response({'error':str(e)}, status=400)
+        
 # Done
 @api_view(['POST']) 
 def login(request):

@@ -8,5 +8,6 @@ urlpatterns = [
     path('update/', views.updateDetail),
     path('login/', views.login),
     path('refreshToken/', views.refreshToken),
+    path('resetPassword/', views.resetPassword),
     # path('getGarment/<str:garment_id>', views.getGarment),
 ]

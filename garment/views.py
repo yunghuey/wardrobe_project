@@ -100,7 +100,8 @@ def handle_base64_image(image_data):
     image_file = ContentFile(decoded_image)
     return image_file
 
-def extract_percentage(text):
+def extract_percentage(text1):
+    text = text1.replace('O','0')
     print(f"Text is {text}")
     percent_start = text.find("%") or text.find("X")
     print(f"Percentage start: {percent_start}")
@@ -119,7 +120,6 @@ def extract_percentage(text):
         while end >= 0 and text[end].isdigit():
             end -= 1
         percentage = text[end+1:percent_start]
-        
     if percentage.isdigit():
         return percentage
     else: 
@@ -154,7 +154,7 @@ def process_material(image_64):
                 if not pending_percentage:
                     # get new percentage number
                     percentage = extract_percentage(pair)
-                
+                    
                     if percentage:
                         # percentage = min(100, float(percentage))
                         pending_percentage = percentage
