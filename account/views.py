@@ -193,6 +193,7 @@ def resetPassword(request):
 # Done
 @api_view(['POST']) 
 def login(request):
+    
     try:
         username = request.data.get('username')
         password = request.data.get('password')  
@@ -224,7 +225,7 @@ def login(request):
                 user_row = user_table.document(user_id)
                 user_row.update({'token': token})
                 return Response({'token':token}, status=200)
-            return Response({'error':'password wrong'}, status=400)
-        return Response({'error': 'Username and password is wrong'}, stauts=400)
+            return Response({'error':'password wrong'}, status=401)
+        return Response({'error': 'Username and password is wrong'}, status=401)
     except Exception as e:
         return Response({'error':str(e)}, status=400)
