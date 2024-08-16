@@ -1,15 +1,18 @@
 # from django.shortcuts import render
 import base64
 import tempfile
-import datetime
+from datetime import datetime, timedelta
 import math
 from django.core.files.base import ContentFile
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from firebase_admin import firestore, storage
+
+from google.protobuf.timestamp_pb2 import Timestamp
 from .models import Garment # models is filename, and Garment is class name
 from .serializers import GarmentSerializer
 from paddleocr import PaddleOCR
+from collections import defaultdict
 import cv2
 import easyocr
 from PIL import Image
@@ -22,6 +25,7 @@ import traceback
 import sys
 import pytz
 import jwt
+
 
 SIZES = ['2XS','XS', 'S', 'M', 'XXL', 'XL','L']
 CLOTHES_COUNTRY = ['CHINA', 'MALAYSIA','PHILIPPINES', 'INDIA', 'INDONESIA',
@@ -913,3 +917,243 @@ def getTotalGarmentNo(request):
     except Exception as e:
         print(str(e))
         return Response({'error':str(e)}, status=400)
+    
+# for website data
+@api_view(['GET']) 
+# to get the total number of user of the mobile application
+def getTotalNumberUserCount(request):
+    try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            collection_ref = db.collection('user')
+            docs = collection_ref.stream()
+            count = sum(1 for _ in docs) - 1 # to remove admin
+            return Response({'total_user': count}, status=200)
+        return Response({'error': 'Unauthorized'}, status=401)
+    except Exception as e:
+        print(str(e))
+        return Response({'error':str(e)}, status=400)
+
+@api_view(['GET']) 
+# to get the total number of garment registered
+def getTotalNumberGarmentCount(request):
+    try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            collection_ref = db.collection('garment')
+            docs = collection_ref.stream()
+            count = sum(1 for _ in docs)
+            return Response({'total_garment': count}, status=200)
+        
+    except Exception as e:
+        print(str(e))
+        return Response({'error':str(e)}, status=400)
+
+@api_view(['GET']) 
+# to calculate the total number variance in each category
+def getTotalVarianceCountForGarment(request):
+    try:
+        token = request.headers.get('Authorization','').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            garment_ref = db.collection('garment')
+            garments = garment_ref.stream() # stream is to retrieve all the documents
+            
+            # declare the set() to ensure only the unique value is stored
+            colors = set()
+            brands = set()
+            countries = set()
+            sizes = set()
+            
+            for garment in garments:
+                garment_data = garment.to_dict()
+                
+                if 'colour_name' in garment_data:
+                    colors.add(garment_data['colour_name'])
+                
+                if 'brand' in garment_data:
+                    brands.add(garment_data['brand'])
+                
+                if 'country' in garment_data:
+                    countries.add(garment_data['country'])
+                
+                if 'size' in garment_data:
+                    sizes.add(garment_data['size'])
+                    
+            result = {
+                'total_colors' : len(colors),
+                'total_brands' : len(brands),
+                'total_countries': len(countries),
+                'total_sizes' : len(sizes)
+            }
+            if result != {}:
+                return Response({'result': result}, status=200)
+            return Response({'empty'}, status=404)
+        return Response({'error':'No user found'}, status=401)
+    except Exception as e:
+        print(str(e))
+        return Response({'error':str(e)}, status=400)
+
+@api_view(['GET'])
+# to know the total garments registered in different duration  
+def getGarmentByDuration(request):
+    try:
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        end_timestamp = datetime.now()
+        
+        date_arr = []        
+        if user_id:
+            choice = request.data.get('duration')
+            if choice == 1:
+                start_timestamp = datetime.now() - timedelta(weeks=1)
+                interval = 1
+            elif choice == 2:
+                start_timestamp = datetime.now() - timedelta(weeks=2)
+                interval = 2
+            else:
+                start_timestamp = datetime.now() - timedelta(weeks=4)
+                interval = 7
+                    
+            db = firestore.client()
+            garment_ref = db.collection('garment')
+            query = garment_ref.where('created_date', '>=', start_timestamp).where('created_date', '<', end_timestamp)
+            results = query.stream()
+
+            grouped_data = defaultdict(int)
+            for doc in results:
+                doc_data = doc.to_dict()
+                created_date = doc_data['created_date'].date()
+                garment_count = doc_data['name']
+                if garment_count:
+                    grouped_data[created_date] += 1
+            
+            # build the date array
+            while start_timestamp < end_timestamp:
+                date_obj = start_timestamp.date()
+                print(date_obj)
+                date_arr.append({
+                    'date': date_obj,
+                    'count': grouped_data.get(date_obj, 0)
+                })
+                start_timestamp += timedelta(days=interval)
+            return Response({'result': date_arr}, status=200)
+        else:
+            return Response({'result': 'empty'}, status=404)
+    except Exception as e:
+        print(str(e))
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+# to know the percentage of garment for each country
+def getGarmentChartByCountry(request):
+    try:
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            results = db.collection('garment').stream()
+            grouped_data = defaultdict(int)
+            for doc in results:
+                doc_data = doc.to_dict()
+                select_country = doc_data['country']
+                garment_count = doc_data['name']
+                if garment_count:
+                    grouped_data[select_country] += 1
+            if len(grouped_data) >0:
+                return Response({'result': grouped_data}, status=200)
+            return Response({'result':'empty'}, status=404)
+        return Response({'unauthorized': 'token error'}, status=401)
+    except Exception as e:
+        print(str(e))
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=400)
+    
+@api_view(['GET'])
+# to know the percentage of garment for each colour
+def getGarmentChartByColour(request):
+    try:
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            results = db.collection('garment').stream()
+            grouped_data = defaultdict(int)
+            for doc in results:
+                doc_data = doc.to_dict()
+                colour = doc_data['colour_name']
+                garment_count = doc_data['name']
+                if garment_count:
+                    grouped_data[colour] += 1
+            if len(grouped_data) >0:
+                return Response({'result': grouped_data}, status=200)
+            return Response({'result':'empty'}, status=404)
+        return Response({'unauthorized': 'token error'}, status=401)
+    except Exception as e:
+        print(str(e))
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=400)
+    
+@api_view(['GET'])
+# to know the percentage of garment for each size
+def getGarmentChartBySize(request):
+    try:
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            results = db.collection('garment').stream()
+            grouped_data = defaultdict(int)
+            for doc in results:
+                doc_data = doc.to_dict()
+                size = doc_data['size']
+                garment_count = doc_data['name']
+                if garment_count:
+                    grouped_data[size] += 1
+            if len(grouped_data) >0:
+                return Response({'result': grouped_data}, status=200)
+            return Response({'result':'empty'}, status=404)
+        return Response({'unauthorized': 'token error'}, status=401)
+    except Exception as e:
+        print(str(e))
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=400)
+    
+@api_view(['GET'])
+# to know the percentage of garment for each brand
+def getGarmentChartByBrand(request):
+    try:
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded_token.get('uid') or decoded_token.get('user_id')
+        if user_id:
+            db = firestore.client()
+            results = db.collection('garment').stream()
+            grouped_data = defaultdict(int)
+            for doc in results:
+                doc_data = doc.to_dict()
+                brand = doc_data['brand']
+                garment_count = doc_data['name']
+                if garment_count:
+                    grouped_data[brand] += 1
+            if len(grouped_data) >0:
+                return Response({'result': grouped_data}, status=200)
+            return Response({'result':'empty'}, status=404)
+        return Response({'unauthorized': 'token error'}, status=401)
+    except Exception as e:
+        print(str(e))
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=400)
