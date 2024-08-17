@@ -18,7 +18,7 @@ urlpatterns = [
     path('getTotalNumberUserCount', views.getTotalNumberUserCount),
     path('getTotalNumberGarmentCount', views.getTotalNumberGarmentCount),
     path('getTotalVarianceCountForGarment', views.getTotalVarianceCountForGarment),
-    path('getGarmentByDuration', views.getGarmentByDuration),
+    path('getGarmentByDuration/<int:duration>', views.getGarmentByDuration),
     path('getGarmentChartByCountry', views.getGarmentChartByCountry),
     path('getGarmentChartByColour', views.getGarmentChartByColour),
     path('getGarmentChartBySize', views.getGarmentChartBySize),

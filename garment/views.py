@@ -931,6 +931,7 @@ def getTotalNumberUserCount(request):
             collection_ref = db.collection('user')
             docs = collection_ref.stream()
             count = sum(1 for _ in docs) - 1 # to remove admin
+            # count = 6
             return Response({'total_user': count}, status=200)
         return Response({'error': 'Unauthorized'}, status=401)
     except Exception as e:
@@ -949,6 +950,7 @@ def getTotalNumberGarmentCount(request):
             collection_ref = db.collection('garment')
             docs = collection_ref.stream()
             count = sum(1 for _ in docs)
+            # count = 18
             return Response({'total_garment': count}, status=200)
         
     except Exception as e:
@@ -994,6 +996,12 @@ def getTotalVarianceCountForGarment(request):
                 'total_countries': len(countries),
                 'total_sizes' : len(sizes)
             }
+            # result = {
+            #     'total_colors' : 6,
+            #     'total_brands' : 5,
+            #     'total_countries': 7,
+            #     'total_sizes' : 5
+            # }
             if result != {}:
                 return Response({'result': result}, status=200)
             return Response({'empty'}, status=404)
@@ -1004,23 +1012,47 @@ def getTotalVarianceCountForGarment(request):
 
 @api_view(['GET'])
 # to know the total garments registered in different duration  
-def getGarmentByDuration(request):
+def getGarmentByDuration(request,duration):
     try:
         token = request.headers.get('Authorization', '').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         end_timestamp = datetime.now()
         
-        date_arr = []        
+        date_arr = []   
         if user_id:
-            choice = request.data.get('duration')
-            if choice == 1:
+            if duration == 1:
+                # date_arr = [
+                #     {"date":"2024-07-19","count":5},
+                #     {"date":"2024-07-20","count":3},
+                #     {"date":"2024-07-21","count":7},
+                #     {"date":"2024-07-22","count":2},
+                #     {"date":"2024-07-23","count":10},
+                #     {"date":"2024-07-24","count":1},
+                #     {"date":"2024-07-25","count":8},
+                # ]
+
                 start_timestamp = datetime.now() - timedelta(weeks=1)
                 interval = 1
-            elif choice == 2:
+            elif duration == 2:
+                # date_arr = [
+                #         {"date":"2024-07-19","count":8},
+                #         {"date":"2024-07-21","count":10},
+                #         {"date":"2024-07-23","count":13},
+                #         {"date":"2024-07-25","count":6},
+                #         {"date":"2024-07-27","count":8},
+                #         {"date":"2024-07-29","count":4},
+                #         {"date":"2024-07-31","count":3}
+                # ]
                 start_timestamp = datetime.now() - timedelta(weeks=2)
                 interval = 2
             else:
+                # date_arr = [
+                #         {"date":"2024-07-10","count":18},
+                #         {"date":"2024-07-17","count":15},
+                #         {"date":"2024-07-24","count":13},
+                #         {"date":"2024-07-31","count":10},
+                # ]
                 start_timestamp = datetime.now() - timedelta(weeks=4)
                 interval = 7
                     
@@ -1030,6 +1062,7 @@ def getGarmentByDuration(request):
             results = query.stream()
 
             grouped_data = defaultdict(int)
+            # count the total number of garment created in each day
             for doc in results:
                 doc_data = doc.to_dict()
                 created_date = doc_data['created_date'].date()
@@ -1038,6 +1071,7 @@ def getGarmentByDuration(request):
                     grouped_data[created_date] += 1
             
             # build the date array
+            #  need to make amendment
             while start_timestamp < end_timestamp:
                 date_obj = start_timestamp.date()
                 print(date_obj)
@@ -1071,6 +1105,14 @@ def getGarmentChartByCountry(request):
                 garment_count = doc_data['name']
                 if garment_count:
                     grouped_data[select_country] += 1
+            # grouped_data = {
+            #     "MALAYSIA": 3,
+            #     "MOROCCO":2,
+            #     "THAILAND": 5,
+            #     "VIETNAM":4,
+            #     "CHINA":3,
+            #     "BANGLADESH": 1
+            # }
             if len(grouped_data) >0:
                 return Response({'result': grouped_data}, status=200)
             return Response({'result':'empty'}, status=404)
@@ -1097,6 +1139,15 @@ def getGarmentChartByColour(request):
                 garment_count = doc_data['name']
                 if garment_count:
                     grouped_data[colour] += 1
+            # grouped_data = {
+            #     "BLACK": 2,
+            #     "GREEN":3,
+            #     "BLUE":4,
+            #     "BROWN":1,
+            #     "YELLOW":3,
+            #     "RED": 2,
+            #     "PURPLE": 3
+            # }
             if len(grouped_data) >0:
                 return Response({'result': grouped_data}, status=200)
             return Response({'result':'empty'}, status=404)
@@ -1123,6 +1174,13 @@ def getGarmentChartBySize(request):
                 garment_count = doc_data['name']
                 if garment_count:
                     grouped_data[size] += 1
+            # grouped_data = {
+            #     "XS": 2,
+            #     "S":5,
+            #     "M":3,
+            #     "L":6,
+            #     "XL":2
+            # }
             if len(grouped_data) >0:
                 return Response({'result': grouped_data}, status=200)
             return Response({'result':'empty'}, status=404)
@@ -1149,6 +1207,15 @@ def getGarmentChartByBrand(request):
                 garment_count = doc_data['name']
                 if garment_count:
                     grouped_data[brand] += 1
+            
+            # grouped_data = {
+            #     "ADIDAS": 5,
+            #     "NIKE":2,
+            #     "UNIQLO":3,
+            #     "ZARA":4,
+            #     "ASICS":2,
+            #     "TOMMYHILFIGER": 2
+            # }
             if len(grouped_data) >0:
                 return Response({'result': grouped_data}, status=200)
             return Response({'result':'empty'}, status=404)
