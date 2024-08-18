@@ -1017,7 +1017,7 @@ def getGarmentByDuration(request,duration):
         token = request.headers.get('Authorization', '').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
-        end_timestamp = datetime.now()
+        end_timestamp = datetime.now().replace(hour=23, minute=23, second=23,microsecond=999999) 
         
         date_arr = []   
         if user_id:
@@ -1032,7 +1032,7 @@ def getGarmentByDuration(request,duration):
                 #     {"date":"2024-07-25","count":8},
                 # ]
 
-                start_timestamp = datetime.now() - timedelta(weeks=1)
+                start_timestamp = datetime.now() - timedelta(days=6)
                 interval = 1
             elif duration == 2:
                 # date_arr = [
@@ -1044,7 +1044,7 @@ def getGarmentByDuration(request,duration):
                 #         {"date":"2024-07-29","count":4},
                 #         {"date":"2024-07-31","count":3}
                 # ]
-                start_timestamp = datetime.now() - timedelta(weeks=2)
+                start_timestamp = datetime.now() - timedelta(days=14)
                 interval = 2
             else:
                 # date_arr = [
@@ -1053,12 +1053,13 @@ def getGarmentByDuration(request,duration):
                 #         {"date":"2024-07-24","count":13},
                 #         {"date":"2024-07-31","count":10},
                 # ]
-                start_timestamp = datetime.now() - timedelta(weeks=4)
+                start_timestamp = datetime.now() - timedelta(weeks=3)
                 interval = 7
-                    
+            start_timestamp = start_timestamp.replace(hour=0, minute=0, second=0,microsecond=0) 
+            
             db = firestore.client()
             garment_ref = db.collection('garment')
-            query = garment_ref.where('created_date', '>=', start_timestamp).where('created_date', '<', end_timestamp)
+            query = garment_ref.where('created_date', '>', start_timestamp).where('created_date', '<=', end_timestamp)
             results = query.stream()
 
             grouped_data = defaultdict(int)
@@ -1066,20 +1067,60 @@ def getGarmentByDuration(request,duration):
             for doc in results:
                 doc_data = doc.to_dict()
                 created_date = doc_data['created_date'].date()
-                garment_count = doc_data['name']
-                if garment_count:
+                garment_name = doc_data['name']
+                if garment_name:
                     grouped_data[created_date] += 1
-            
-            # build the date array
-            #  need to make amendment
-            while start_timestamp < end_timestamp:
-                date_obj = start_timestamp.date()
-                print(date_obj)
-                date_arr.append({
-                    'date': date_obj,
-                    'count': grouped_data.get(date_obj, 0)
-                })
-                start_timestamp += timedelta(days=interval)
+            print(grouped_data)
+            print(f"start time {start_timestamp} ends at {end_timestamp}")
+
+            if duration == 1:
+                while start_timestamp <= end_timestamp:
+                    date_obj = start_timestamp.date()
+                    print(date_obj)
+                    # get the count between temp_timestamp
+                    garment_number= 0
+                    date_arr.append({
+                        'date': date_obj,
+                        'count': grouped_data.get(date_obj, 0)
+                    })
+                    start_timestamp += timedelta(days=interval)
+            elif duration == 2:
+                start_timestamp = (start_timestamp+ timedelta(days=1))
+                temp_timestamp = start_timestamp
+                start_timestamp += timedelta(days=1)
+                while start_timestamp <= end_timestamp:
+                    date_obj = start_timestamp.date()
+                    # get the count between temp_timestamp
+                    garment_number= 0
+                    while (temp_timestamp <= start_timestamp):
+                        garment_number += grouped_data.get(temp_timestamp.date(), 0)
+                        print(f"{temp_timestamp.date()} has {garment_number}")
+                        temp_timestamp += timedelta(days=1)
+                    
+                    date_arr.append({
+                        'date': date_obj,
+                        'count': garment_number
+                    })
+                    temp_timestamp = (start_timestamp + timedelta(days=1)).replace(hour=0, minute=0, second=0,microsecond=0)
+                    start_timestamp += timedelta(days=interval)
+            else:
+                temp_timestamp = start_timestamp
+                # start_timestamp += timedelta(days=1)
+                while start_timestamp <= end_timestamp:
+                    date_obj = start_timestamp.date()
+                    # get the count between temp_timestamp
+                    garment_number= 0
+                    while (temp_timestamp <= start_timestamp):
+                        garment_number += grouped_data.get(temp_timestamp.date(), 0)
+                        print(f"{temp_timestamp.date()} has {garment_number}")
+                        temp_timestamp += timedelta(days=1)
+                    print(f"duration {date_obj} total count {garment_number}")
+                    date_arr.append({
+                        'date': date_obj,
+                        'count': garment_number
+                    })
+                    temp_timestamp = (start_timestamp + timedelta(days=1)).replace(hour=0, minute=0, second=0,microsecond=0)
+                    start_timestamp += timedelta(days=interval)
             return Response({'result': date_arr}, status=200)
         else:
             return Response({'result': 'empty'}, status=404)
