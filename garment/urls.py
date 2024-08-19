@@ -16,11 +16,8 @@ urlpatterns = [
     path('detectMaterial', views.detectMaterial),
     # for website
     path('getTotalNumberUserCount', views.getTotalNumberUserCount),
-    path('getTotalNumberGarmentCount', views.getTotalNumberGarmentCount),
+    # path('getTotalNumberGarmentCount', views.getTotalNumberGarmentCount),
     path('getTotalVarianceCountForGarment', views.getTotalVarianceCountForGarment),
     path('getGarmentByDuration/<int:duration>', views.getGarmentByDuration),
-    path('getGarmentChartByCountry', views.getGarmentChartByCountry),
-    path('getGarmentChartByColour', views.getGarmentChartByColour),
-    path('getGarmentChartBySize', views.getGarmentChartBySize),
-    path('getGarmentChartByBrand', views.getGarmentChartByBrand)
+    path('getGarmentCategoriesChart', views.getGarmentCategoriesChart),
 ]
