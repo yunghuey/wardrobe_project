@@ -12,7 +12,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from .models import Garment # models is filename, and Garment is class name
 from .serializers import GarmentSerializer
 from paddleocr import PaddleOCR
-from collections import defaultdict
+from collections import defaultdict,OrderedDict
 import cv2
 import easyocr
 from PIL import Image
@@ -936,6 +936,7 @@ def getTotalNumberUserCount(request):
             docs = collection_ref.stream()
             count = sum(1 for _ in docs) - 1 # to remove admin
             # count = 6
+            # need to calculate the user growth rate
             return Response({'total_user': count}, status=200)
         return Response({'error': 'Unauthorized'}, status=401)
     except Exception as e:
@@ -951,9 +952,10 @@ def getTotalVarianceCountForGarment(request):
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         if user_id:
+            selected_field1 = ['name', 'brand', 'colour_name', 'country', 'size']
             db = firestore.client()
             garment_ref = db.collection('garment')
-            garments = list(garment_ref.stream())  # Retrieve all the documents once
+            garments = list(garment_ref.select(selected_field1).stream())  # Retrieve all the documents once
             
             count = len(garments)  # Total number of garments
             
@@ -976,13 +978,20 @@ def getTotalVarianceCountForGarment(request):
                 
                 if 'size' in garment_data:
                     sizes.add(garment_data['size'])
-                    
+               
+            # second part
+            now = datetime.now()
+            first_day_of_month = now.replace(day=1, hour=0, minute=0,second=0, microsecond=0)
+            query2 = garment_ref.select('created_date').where('created_date', '>=', first_day_of_month).stream()
+            new_garment_count = sum(1 for _ in query2)
+
             result = {
                 'total_colors' : len(colors),
                 'total_brands' : len(brands),
                 'total_countries': len(countries),
                 'total_sizes' : len(sizes),
-                'total_garments': count
+                'total_garments': count,
+                'new_garment_month': new_garment_count
             }
             # result = {
             #     'total_colors' : 6,
@@ -1047,8 +1056,10 @@ def getGarmentByDuration(request,duration):
             selected_fields = ['created_date','name']
             db = firestore.client()
             garment_ref = db.collection('garment')
+            
+            # first part
             query = garment_ref.where('created_date', '>', start_timestamp).where('created_date', '<=', end_timestamp).select(selected_fields)
-            results = query.stream()
+            results = list(query.stream())
 
             grouped_data = defaultdict(int)
             # count the total number of garment created in each day
@@ -1058,8 +1069,6 @@ def getGarmentByDuration(request,duration):
                 garment_name = doc_data['name']
                 if garment_name:
                     grouped_data[created_date] += 1
-            print(grouped_data)
-            print(f"start time {start_timestamp} ends at {end_timestamp}")
 
             if duration == 1:
                 while start_timestamp <= end_timestamp:
@@ -1109,6 +1118,9 @@ def getGarmentByDuration(request,duration):
                     })
                     temp_timestamp = (start_timestamp + timedelta(days=1)).replace(hour=0, minute=0, second=0,microsecond=0)
                     start_timestamp += timedelta(days=interval)
+            
+            
+            
             return Response({'result': date_arr}, status=200)
         else:
             return Response({'result': 'empty'}, status=404)
@@ -1128,6 +1140,8 @@ def getGarmentCategoriesChart(request):
             selected_fields = ['size','name', 'brand','colour_name', 'country']
             db = firestore.client()
             results = list(db.collection('garment').select(selected_fields).stream())
+            
+            garment_total_count = len(results)
             
             size_data = defaultdict(int)
             for doc in results:
@@ -1160,12 +1174,27 @@ def getGarmentCategoriesChart(request):
                 garment_count = doc_data['name']
                 if garment_count:
                     country_data[select_country] += 1
-                           
+            
+            sorted_size_data = OrderedDict(sorted(size_data.items(), key=lambda item: item[1], reverse=True))
+            sorted_brand_data = OrderedDict(sorted(brand_data.items(), key=lambda item: item[1], reverse=True))
+            sorted_colour_data = OrderedDict(sorted(colour_data.items(), key=lambda item: item[1], reverse=True))
+            sorted_country_data = OrderedDict(sorted(country_data.items(), key=lambda item: item[1], reverse=True))
+            
+            top_size = OrderedDict(list(sorted_size_data.items())[:3])
+            top_brand = OrderedDict(list(sorted_brand_data.items())[:3])
+            top_country = OrderedDict(list(sorted_country_data.items())[:3])
+            top_colour = OrderedDict(list(sorted_colour_data.items())[:3])
+            
             results = {
-                'size' : size_data, 
-                'brand' : brand_data,
-                'colour': colour_data,
-                'country': country_data
+                'size' : sorted_size_data, 
+                'brand' : sorted_brand_data,
+                'colour': sorted_colour_data,
+                'country': sorted_country_data,
+                'top_size': top_size,
+                'top_brand':top_brand,
+                'top_country':top_country,
+                'top_colour': top_colour,
+                'total_garments' : garment_total_count
             }
             
             
