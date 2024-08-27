@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from firebase_admin import firestore, storage
-
+import calendar
 from google.protobuf.timestamp_pb2 import Timestamp
 from .models import Garment # models is filename, and Garment is class name
 from .serializers import GarmentSerializer
@@ -927,17 +927,54 @@ def getTotalGarmentNo(request):
 # to get the total number of user of the mobile application
 def getTotalNumberUserCount(request):
     try:
+        user_list = []
         token = request.headers.get('Authorization','').split('Bearer ')[-1]
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         if user_id:
             db = firestore.client()
             collection_ref = db.collection('user')
-            docs = collection_ref.stream()
-            count = sum(1 for _ in docs) - 1 # to remove admin
+            docs = collection_ref.select(['last_name', 'first_name', 'created_date'])\
+                .where('username', '!=', 'admin')\
+                .order_by('created_date').stream()
+            for c in docs:
+                user_list.append(f"{c.get('first_name')} {c.get('last_name')} is registered at {c.get('created_date').date()}")
+            count =len(user_list) # to remove admin
             # count = 6
+            
             # need to calculate the user growth rate
-            return Response({'total_user': count}, status=200)
+            current_date = datetime.now().date()
+            
+            first_day_current_month = datetime(current_date.year, current_date.month, 1)
+            first_day_current_month = first_day_current_month.replace(hour=0, minute=0,second=0, microsecond=0)
+            
+            if current_date.month == 1:
+                first_day_previous_month = datetime(current_date.year - 1, 12, 1)
+            else:
+                first_day_previous_month = datetime(current_date.year, current_date.month - 1, 1)
+            first_day_previous_month = first_day_previous_month.replace(hour=0, minute=0, second=0, microsecond=0)
+            last_day_previous_month = first_day_previous_month.replace(
+                day=calendar.monthrange(first_day_previous_month.year, first_day_previous_month.month)[1],
+                hour=23, minute=59, second=59, microsecond=999999
+            )
+            
+            print(first_day_current_month)
+            print(first_day_previous_month)
+            query1 = collection_ref.select('created_date').where('created_date', '>=', first_day_current_month).stream()
+            count_current_month = sum(1 for _ in query1)
+            print(f"current month {count_current_month}")
+            
+            query2 = collection_ref.select('created_date').where('created_date', '>=', first_day_previous_month)\
+                .where('created_date', '<=', last_day_previous_month).stream()
+            count_previous_month = sum(1 for _ in query2)
+            print(f"previous month {count_previous_month}")
+            
+            if count_previous_month == 0:
+                growth_rate = float('inf')  # Handle division by zero
+            else:
+                growth_rate = ((count_current_month - count_previous_month) / count_previous_month) * 100
+
+            return Response({'total_user': count, 'growth_rate': growth_rate, 'user_list':user_list }, status=200)
         return Response({'error': 'Unauthorized'}, status=401)
     except Exception as e:
         print(str(e))
