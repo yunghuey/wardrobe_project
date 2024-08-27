@@ -938,7 +938,7 @@ def getTotalNumberUserCount(request):
                 .where('username', '!=', 'admin')\
                 .order_by('created_date').stream()
             for c in docs:
-                user_list.append(f"{c.get('first_name')} {c.get('last_name')} is registered at {c.get('created_date').date()}")
+                user_list.append(f"{c.get('created_date').date()} : {c.get('first_name')} {c.get('last_name')} ")
             count =len(user_list) # to remove admin
             # count = 6
             
@@ -989,13 +989,40 @@ def getTotalVarianceCountForGarment(request):
         decoded_token = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded_token.get('uid') or decoded_token.get('user_id')
         if user_id:
-            selected_field1 = ['name', 'brand', 'colour_name', 'country', 'size']
+            selected_field1 = ['name', 'brand', 'colour_name', 'country', 'size','user_id']
             db = firestore.client()
             garment_ref = db.collection('garment')
+            
             garments = list(garment_ref.select(selected_field1).stream())  # Retrieve all the documents once
+            count = len(garments)
             
-            count = len(garments)  # Total number of garments
+            # collect all user ID from garment list
+            user_ids = set(g.get('user_id') for g in garments if g.get('user_id'))
+            print(len(user_ids))
+            user_name_map = {}
+            if  user_ids:
+                user_ref = db.collection('user')
+                for id in user_ids:
+                    user_doc = user_ref.document(id).get()
+                    if user_doc.exists:
+                        user_name = f"{user_doc.get('first_name')} {user_doc.get('last_name')}"
+                        user_name_map[id] = user_name
+                    
+            garment_list = []
+            print(len(user_name_map))
+            for g in garments:
+                user_id = g.get('user_id')
+                user_name = user_name_map.get(user_id, 'Unknown') if user_id else 'Unknown'
+                garment_list.append({
+                    'garment_name': g.get('name'),
+                    'garment_brand': g.get('brand'),
+                    'garment_colour': g.get('colour_name'),
+                    'garment_country': g.get('country'),
+                    'garment_size': g.get('size'),
+                    'user': user_name
+                })
             
+            # variance count
             colors = set()
             brands = set()
             countries = set()
@@ -1028,7 +1055,8 @@ def getTotalVarianceCountForGarment(request):
                 'total_countries': len(countries),
                 'total_sizes' : len(sizes),
                 'total_garments': count,
-                'new_garment_month': new_garment_count
+                'new_garment_month': new_garment_count,
+                'garment_list': garment_list
             }
             # result = {
             #     'total_colors' : 6,
@@ -1042,6 +1070,10 @@ def getTotalVarianceCountForGarment(request):
         return Response({'error':'No user found'}, status=401)
     except Exception as e:
         print(str(e))
+        stack_trace = traceback.format_exc()
+        
+        # Print the stack trace to the console or logs
+        print(stack_trace)
         return Response({'error':str(e)}, status=400)
 
 @api_view(['GET'])
