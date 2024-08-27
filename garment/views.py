@@ -993,9 +993,11 @@ def getTotalVarianceCountForGarment(request):
             db = firestore.client()
             garment_ref = db.collection('garment')
             
+            # 1: total number of garment
             garments = list(garment_ref.select(selected_field1).stream())  # Retrieve all the documents once
             count = len(garments)
             
+            # 2. garment name list
             # collect all user ID from garment list
             user_ids = set(g.get('user_id') for g in garments if g.get('user_id'))
             print(len(user_ids))
@@ -1021,8 +1023,9 @@ def getTotalVarianceCountForGarment(request):
                     'garment_size': g.get('size'),
                     'user': user_name
                 })
-            
-            # variance count
+
+            # 3. list of data for variance in detail
+            # 4. total variance summary
             colors = set()
             brands = set()
             countries = set()
@@ -1043,7 +1046,7 @@ def getTotalVarianceCountForGarment(request):
                 if 'size' in garment_data:
                     sizes.add(garment_data['size'])
                
-            # second part
+            # 5. calculate newly registered garment
             now = datetime.now()
             first_day_of_month = now.replace(day=1, hour=0, minute=0,second=0, microsecond=0)
             query2 = garment_ref.select('created_date').where('created_date', '>=', first_day_of_month).stream()
@@ -1051,12 +1054,16 @@ def getTotalVarianceCountForGarment(request):
 
             result = {
                 'total_colors' : len(colors),
+                'colour_list': colors,
                 'total_brands' : len(brands),
+                'brand_list': brands,
                 'total_countries': len(countries),
+                'country_list': countries,
                 'total_sizes' : len(sizes),
+                'sizes_list': sizes,
+                'garment_list': garment_list,
                 'total_garments': count,
                 'new_garment_month': new_garment_count,
-                'garment_list': garment_list
             }
             # result = {
             #     'total_colors' : 6,
